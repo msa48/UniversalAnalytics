@@ -210,6 +210,68 @@ namespace Echovoice.UniversalAnalytics
             catch { }
         }
 
+		/// <summary>
+		/// Track application or screen view
+		/// </summary>
+		/// <param name="identity">Application identity</param>
+		/// <param name="version">Application version</param>
+		/// <param name="name">Application name</param>
+		/// <param name="setupIdentity">Application setuop identity</param>
+        /// <param name="uaclient">Client override object</param>
+        public void TrackScreenView(string identity, string version = "", string name = "", string setupIdentity = "", UAClient uaclient = null)
+        {
+            // upfill and build
+            TrackScreenView((IsHttpRequestAvailable) ? new HttpContextWrapper(HttpContext.Current) : null, identity, version, name, setupIdentity, uaclient);
+
+        }
+
+        /// <summary>
+        /// Track application or screen view
+        /// </summary>
+        /// <param name="httpContext">Current http context to extract payload from</param>
+        /// <param name="identity">Application identity</param>
+        /// <param name="version">Application version</param>
+        /// <param name="name">Application name</param>
+        /// <param name="setupIdentity">Application setuop identity</param>
+        /// <param name="uaclient">Client override object</param>
+		public void TrackScreenView(HttpContextBase httpContext, string identity, string version = "", string name = "", string setupIdentity = "", UAClient uaclient = null)
+		{
+			// initialize the uaclient if null
+			if (uaclient == null)
+				uaclient = new UAClient();
+
+			// build the payload
+            StringBuilder data = BuildPayload(BuildBasePayload(httpContext, uaclient), BuildScreenViewPayload(identity, version, name, setupIdentity));
+
+			// build the http request
+			HttpWebRequest request = BuildRequest(data);
+
+			// send sync and fail silently
+			try
+			{
+				using (WebResponse response = request.GetResponse()) { }
+			}
+			catch { }
+		}
+
+        private Dictionary<string, string> BuildScreenViewPayload(string identity, string version, string name, string setupIdentity)
+        {
+            var dict = new Dictionary<string, string>();
+
+            dict["t"] = "screenview";
+
+            if (!String.IsNullOrWhiteSpace(identity))
+                dict["aid"] = identity;
+            if (!String.IsNullOrWhiteSpace(version))
+                dict["av"] = version;
+            if (!String.IsNullOrWhiteSpace(name))
+                dict["an"] = name;
+            if (!String.IsNullOrWhiteSpace(setupIdentity))
+                dict["aiid"] = setupIdentity;
+
+            return dict;
+        }
+
         /// <summary>
         /// Async track an event (non-blocking)
         /// </summary>
@@ -608,31 +670,31 @@ namespace Echovoice.UniversalAnalytics
             // send async and fail silently
             bool queued_job = false;
 
-            // check for an ASP.NET application
-            if (HostingEnvironment.ApplicationHost != null)
-            {
-                // The HostingEnvironment.QueueBackgroundWorkItem method lets you schedule small background work items.
-                // ASP.NET tracks these items and prevents IIS from abruptly terminating the worker process until all background work items have completed.
-                try
-                {
-                    HostingEnvironment.QueueBackgroundWorkItem(ct =>
-                    {
-                        try
-                        {
-                            using (WebResponse response = request.GetResponse()) { }
-                        }
-                        catch { }
-                    });
+            //// check for an ASP.NET application
+            //if (HostingEnvironment.ApplicationHost != null)
+            //{
+            //    // The HostingEnvironment.QueueBackgroundWorkItem method lets you schedule small background work items.
+            //    // ASP.NET tracks these items and prevents IIS from abruptly terminating the worker process until all background work items have completed.
+            //    try
+            //    {
+            //        HostingEnvironment.QueueBackgroundWorkItem(ct =>
+            //        {
+            //            try
+            //            {
+            //                using (WebResponse response = request.GetResponse()) { }
+            //            }
+            //            catch { }
+            //        });
 
-                    // set the flag
-                    queued_job = true;
-                }
-                catch (InvalidOperationException)
-                {
-                    // override fail
-                    queued_job = false;
-                }
-            }
+            //        // set the flag
+            //        queued_job = true;
+            //    }
+            //    catch (InvalidOperationException)
+            //    {
+            //        // override fail
+            //        queued_job = false;
+            //    }
+            //}
 
             // check for either non-iis or queued fail
             if (!queued_job)
